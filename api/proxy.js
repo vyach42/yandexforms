@@ -2,30 +2,51 @@
 export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
-      // Логируем что пришло от Яндекс
-      console.log('Data from Yandex:', req.body);
+      // Правильно получаем данные от Яндекс Форм
+      let body = '';
       
-      // Пересылаем в Google Script
+      // Если данные в формате текста (как приходило на webhook.site)
+      if (req.body && typeof req.body === 'object') {
+        body = req.body;
+      } else {
+        // Если данные как raw string
+        body = await getRawBody(req);
+      }
+      
+      console.log('Raw data from Yandex:', body);
+      
+      // Google Script URL
       const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbxnoo5_bv4z4U0qxkI7a9UgEyXw0QuYZBCiTS4vqlBVDUz1XdI44ueU1OBjs2dafdBrBg/exec';
       
+      // Пересылаем в Google Script как TEXT (как было на webhook.site)
       const response = await fetch(googleScriptUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/plain', // Меняем на text/plain!
         },
-        body: JSON.stringify(req.body)
+        body: body // Пересылаем как есть
       });
       
       const result = await response.text();
+      console.log('Google Script response:', result);
       
-      // Возвращаем ответ Яндекс Формам
       res.status(200).send(result);
       
     } catch (error) {
       console.error('Proxy error:', error);
-      res.status(500).send('Proxy error');
+      res.status(500).send('Proxy error: ' + error.message);
     }
   } else {
     res.status(405).send('Method not allowed');
   }
+}
+
+// Функция для получения raw body
+async function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => data += chunk);
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
 }
