@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       console.log('Raw data from Yandex:', body);
       
       // Google Script URL
-      const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbxnoo5_bv4z4U0qxkI7a9UgEyXw0QuYZBCiTS4vqlBVDUz1XdI44ueU1OBjs2dafdBrBg/exec';
+      const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbwJI7zQ0JSygFlJWuzCREjBC05Pl8_D5cF4RQy4aG7pMb1ubUIM7Wek0oci3OkHIUvheQ/exec';
       
       // Пересылаем в Google Script как TEXT (как было на webhook.site)
       const response = await fetch(googleScriptUrl, {
