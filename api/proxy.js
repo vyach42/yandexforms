@@ -46,7 +46,7 @@ async function getRawBody(req) {
   });
 }
 
-// Точный парсинг по вопросам из Яндекс Форм
+// Простой и надежный парсинг по точным вопросам С ЗАЩИТОЙ
 function parseYandexFormData(rawData) {
   const result = {
     fullName: '',
@@ -73,149 +73,118 @@ function parseYandexFormData(rawData) {
     text = text.replace(dateMatch[0], '').trim();
   }
 
-  // Точные вопросы из Яндекс Форм (как в твоем файле)
+  // Точные тексты вопросов (как приходят в данных) - В ТОЧНОМ ПОРЯДКЕ
   const questions = [
-    'ФИО (как в паспорте)',
-    'E-mail',
-    'Ваш номер телефона в формате 70001234567 (не используйте "+", "-" и скобки)',
-    'Ссылка на скан или фото документа об образовании (Яндекс.Диск)',
-    'Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании (Яндекс.Диск)',
-    'Уровень образования ВО/СПО',
+    'ФИО как в паспорте',
+    'E-mail', 
+    'Ваш номер телефона в формате 70001234567 не используйте , - и скобки',
+    'Ссылка на скан или фото документа об образовании Яндекс.Диск',
+    'Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании Яндекс.Диск',
+    'Уровень образования ВО СПО',
     'Фамилия указанная в дипломе о ВО или СПО',
-    'Серия документа о ВО/СПО',
-    'Номер документа о ВО/СПО',
+    'Серия документа о ВО СПО',
+    'Номер документа о ВО СПО',
     'Дата вашего рождения',
     'СНИЛС в формате 123-456-789 98',
     'Гражданство'
   ];
 
-  // Создаем regex паттерны для каждого вопроса
-  const patterns = [
-    // ФИО (как в паспорте) - всё до E-mail
-    { 
-      key: 'fullName', 
-      pattern: /ФИО \(как в паспорте\)(.+?)(?=E-mail)/,
-      clean: (str) => str.replace('ФИО (как в паспорте)', '').trim()
-    },
-    
-    // E-mail
-    { 
-      key: 'email', 
-      pattern: /E-mail(.+?)(?=Ваш номер телефона)/,
-      clean: (str) => str.replace('E-mail', '').trim()
-    },
-    
-    // Ваш номер телефона
-    { 
-      key: 'phone', 
-      pattern: /Ваш номер телефона в формате 70001234567 \(не используйте "\+", "-" и скобки\)(.+?)(?=Ссылка на скан|Уровень образования|Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => str.replace('Ваш номер телефона в формате 70001234567 (не используйте "+", "-" и скобки)', '').trim()
-    },
-    
-    // Ссылка на скан документа об образовании
-    { 
-      key: 'educationDocLink', 
-      pattern: /Ссылка на скан или фото документа об образовании \(Яндекс\.Диск\)(.+?)(?=Ссылка на скан или фото документа о смене фамилии|Уровень образования|Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => {
-        const cleaned = str.replace('Ссылка на скан или фото документа об образовании (Яндекс.Диск)', '').trim();
-        const urlMatch = cleaned.match(/(https?:\/\/[^\s]+)/);
-        return urlMatch ? urlMatch[1] : cleaned;
-      }
-    },
-    
-    // Ссылка на скан документа о смене фамилии
-    { 
-      key: 'nameChangeDocLink', 
-      pattern: /Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании \(Яндекс\.Диск\)(.+?)(?=Уровень образования|Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => {
-        const cleaned = str.replace('Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании (Яндекс.Диск)', '').trim();
-        const urlMatch = cleaned.match(/(https?:\/\/[^\s]+)/);
-        return urlMatch ? urlMatch[1] : cleaned;
-      }
-    },
-    
-    // Уровень образования ВО/СПО
-    { 
-      key: 'educationLevel', 
-      pattern: /Уровень образования ВО\/СПО(.+?)(?=Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => str.replace('Уровень образования ВО/СПО', '').trim()
-    },
-    
-    // Фамилия указанная в дипломе
-    { 
-      key: 'diplomaSurname', 
-      pattern: /Фамилия указанная в дипломе о ВО или СПО(.+?)(?=Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => str.replace('Фамилия указанная в дипломе о ВО или СПО', '').trim()
-    },
-    
-    // Серия документа
-    { 
-      key: 'documentSeries', 
-      pattern: /Серия документа о ВО\/СПО(.+?)(?=Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => str.replace('Серия документа о ВО/СПО', '').trim()
-    },
-    
-    // Номер документа
-    { 
-      key: 'documentNumber', 
-      pattern: /Номер документа о ВО\/СПО(.+?)(?=Дата вашего рождения|СНИЛС|Гражданство)/,
-      clean: (str) => str.replace('Номер документа о ВО/СПО', '').trim()
-    },
-    
-    // Дата рождения
-    { 
-      key: 'birthDate', 
-      pattern: /Дата вашего рождения(.+?)(?=СНИЛС|Гражданство)/,
-      clean: (str) => {
-        const cleaned = str.replace('Дата вашего рождения', '').trim();
-        const dateMatch = cleaned.match(/(\d{4}-\d{2}-\d{2})/);
-        return dateMatch ? dateMatch[1] : cleaned;
-      }
-    },
-    
-    // СНИЛС
-    { 
-      key: 'snils', 
-      pattern: /СНИЛС в формате 123-456-789 98(.+?)(?=Гражданство)/,
-      clean: (str) => str.replace('СНИЛС в формате 123-456-789 98', '').trim()
-    },
-    
-    // Гражданство
-    { 
-      key: 'citizenship', 
-      pattern: /Гражданство(.+)/,
-      clean: (str) => str.replace('Гражданство', '').trim()
-    }
-  ];
-
-  // Парсим каждый вопрос
-  patterns.forEach(({ key, pattern, clean }) => {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      result[key] = clean(match[1]);
-    } else {
-      // Пробуем альтернативный поиск
-      const question = questions.find(q => text.includes(q));
-      if (question) {
-        const startIndex = text.indexOf(question) + question.length;
-        const nextQuestion = questions.find(q => text.indexOf(q) > startIndex);
-        const endIndex = nextQuestion ? text.indexOf(nextQuestion) : text.length;
-        
-        const value = text.substring(startIndex, endIndex).trim();
-        if (value && !value.includes('ФИО') && !value.includes('E-mail') && !value.includes('Ваш номер')) {
-          result[key] = value;
-        }
-      }
+  // Создаем массив найденных вопросов с их позициями
+  const foundQuestions = [];
+  
+  questions.forEach(question => {
+    const position = text.indexOf(question);
+    if (position !== -1) {
+      foundQuestions.push({
+        question: question,
+        position: position
+      });
     }
   });
+
+  // Сортируем вопросы по их позиции в тексте
+  foundQuestions.sort((a, b) => a.position - b.position);
+
+  // Обрабатываем каждый найденный вопрос
+  for (let i = 0; i < foundQuestions.length; i++) {
+    const currentQ = foundQuestions[i];
+    const nextQ = foundQuestions[i + 1];
+    
+    const startIndex = currentQ.position + currentQ.question.length;
+    const endIndex = nextQ ? nextQ.position : text.length;
+    
+    let answer = text.substring(startIndex, endIndex).trim();
+    
+    // Очищаем ответ от возможных остатков других вопросов
+    answer = cleanAnswer(answer, questions);
+    
+    // Сохраняем в соответствующее поле
+    switch(currentQ.question) {
+      case 'ФИО как в паспорте':
+        result.fullName = answer;
+        break;
+      case 'E-mail':
+        result.email = answer;
+        break;
+      case 'Ваш номер телефона в формате 70001234567 не используйте , - и скобки':
+        result.phone = answer;
+        break;
+      case 'Ссылка на скан или фото документа об образовании Яндекс.Диск':
+        result.educationDocLink = extractUrl(answer);
+        break;
+      case 'Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании Яндекс.Диск':
+        result.nameChangeDocLink = extractUrl(answer);
+        break;
+      case 'Уровень образования ВО СПО':
+        result.educationLevel = answer;
+        break;
+      case 'Фамилия указанная в дипломе о ВО или СПО':
+        result.diplomaSurname = answer;
+        break;
+      case 'Серия документа о ВО СПО':
+        result.documentSeries = answer;
+        break;
+      case 'Номер документа о ВО СПО':
+        result.documentNumber = answer;
+        break;
+      case 'Дата вашего рождения':
+        result.birthDate = extractDate(answer);
+        break;
+      case 'СНИЛС в формате 123-456-789 98':
+        result.snils = answer;
+        break;
+      case 'Гражданство':
+        result.citizenship = answer;
+        break;
+    }
+  }
 
   return result;
 }
 
-// Для Vercel - нужно указать максимальный размер body
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: false,
-  },
-};
+// Функция для очистки ответа от остатков вопросов
+function cleanAnswer(answer, allQuestions) {
+  let cleaned = answer;
+  
+  // Ищем в ответе начало любого другого вопроса и обрезаем до него
+  allQuestions.forEach(question => {
+    const questionIndex = cleaned.indexOf(question);
+    if (questionIndex !== -1) {
+      cleaned = cleaned.substring(0, questionIndex).trim();
+    }
+  });
+  
+  return cleaned;
+}
+
+// Функция для извлечения URL из ответа
+function extractUrl(text) {
+  const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+  return urlMatch ? urlMatch[1] : text;
+}
+
+// Функция для извлечения даты из ответа
+function extractDate(text) {
+  const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
+  return dateMatch ? dateMatch[1] : text;
+}
