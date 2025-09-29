@@ -188,3 +188,35 @@ function extractDate(text) {
   const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
   return dateMatch ? dateMatch[1] : text;
 }
+
+
+// Функция для восстановления ссылок из ебанного формата Яндекса
+function fixYandexUrl(brokenUrl) {
+  if (!brokenUrl) return '';
+  
+  // Восстанавливаем нормальный URL
+  let fixed = brokenUrl
+    .replace(/^https /, 'https://')
+    .replace(/^http /, 'http://')
+    .replace(/\s+/g, '/') // Заменяем пробелы на слеши
+    .replace(/\/$/, ''); // Убираем trailing slash если есть
+  
+  return fixed;
+}
+
+// Функция для извлечения URL из ответа (ОБНОВЛЕННАЯ)
+function extractUrl(text) {
+  // Пробуем найти нормальный URL
+  const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+  if (urlMatch) return urlMatch[1];
+  
+  // Если нет нормального URL, пробуем восстановить из ебанного формата Яндекса
+  const yandexUrlMatch = text.match(/(https?)\s+([^\s]+(?:\s+[^\s]+)*)/);
+  if (yandexUrlMatch) {
+    const protocol = yandexUrlMatch[1];
+    const path = yandexUrlMatch[2];
+    return fixYandexUrl(`${protocol} ${path}`);
+  }
+  
+  return text;
+}
