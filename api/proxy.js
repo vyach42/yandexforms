@@ -1,4 +1,4 @@
-// Простой и надежный парсинг по ключевым словам
+// Умный парсинг данных Яндекс Форм
 function parseYandexFormData(rawData) {
   const result = {
     fullName: '',
@@ -16,58 +16,57 @@ function parseYandexFormData(rawData) {
     submitDate: ''
   };
 
+  // Убираем префикс
   let text = rawData.replace('Raw data from Yandex: ', '');
   
-  // Дата отправки
+  // Вытаскиваем дату отправки (последняя дата в формате DD.MM.YYYY)
   const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4})$/);
   if (dateMatch) {
     result.submitDate = dateMatch[1];
     text = text.replace(dateMatch[0], '').trim();
   }
 
-  // Разбиваем текст по ключевым словам
-  const sections = text.split(/(?=E-mail|Ваш номер телефона|Ссылка на скан|Уровень образования|Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/);
-
-  sections.forEach(section => {
-    section = section.trim();
+  // Более точные паттерны для парсинга
+  const patterns = [
+    // ФИО - всё до E-mail
+    { key: 'fullName', pattern: /^(.+?)(?=E-mail)/ },
     
-    if (section.startsWith('E-mail')) {
-      result.email = section.replace('E-mail', '').trim();
-    } 
-    else if (section.startsWith('Ваш номер телефона')) {
-      // Ищем номер телефона (цифры после описания)
-      const phoneMatch = section.match(/([7]\s?[0-9\s\-\(\)]{10,})/);
-      if (phoneMatch) result.phone = phoneMatch[1].trim();
-    }
-    else if (section.includes('документа об образовании') && section.includes('http')) {
-      const linkMatch = section.match(/(http[^\s]+)/);
-      if (linkMatch) result.educationDocLink = linkMatch[1];
-    }
-    else if (section.startsWith('Уровень образования')) {
-      result.educationLevel = section.replace('Уровень образования ВО СПО', '').trim();
-    }
-    else if (section.startsWith('Фамилия указанная')) {
-      result.diplomaSurname = section.replace('Фамилия указанная в дипломе о ВО или СПО', '').trim();
-    }
-    else if (section.startsWith('Серия документа')) {
-      result.documentSeries = section.replace('Серия документа о ВО СПО', '').trim();
-    }
-    else if (section.startsWith('Номер документа')) {
-      result.documentNumber = section.replace('Номер документа о ВО СПО', '').trim();
-    }
-    else if (section.startsWith('Дата вашего рождения')) {
-      const dateMatch = section.match(/(\d{4}-\d{2}-\d{2})/);
-      if (dateMatch) result.birthDate = dateMatch[1];
-    }
-    else if (section.startsWith('СНИЛС')) {
-      // Парсинг СНИЛС
-    }
-    else if (section.startsWith('Гражданство')) {
-      result.citizenship = section.replace('Гражданство', '').trim();
-    }
-    else if (!section.includes('E-mail') && !section.includes('Ваш номер')) {
-      // Это ФИО (первая секция без ключевых слов)
-      result.fullName = section.trim();
+    // Email - после E-mail до "Ваш номер телефона"
+    { key: 'email', pattern: /E-mail\s+(.+?)(?=Ваш номер телефона)/ },
+    
+    // Телефон - ищем последовательность цифр с пробелами/дефисами
+    { key: 'phone', pattern: /Ваш номер телефона[^]*?([7]\s?[0-9\s\-\(\)]{10,})/ },
+    
+    // Ссылка на документ об образовании
+    { key: 'educationDocLink', pattern: /документа об образовании[^]*?(http[^\s]+)/ },
+    
+    // Уровень образования - после "Уровень образования ВО СПО"
+    { key: 'educationLevel', pattern: /Уровень образования ВО СПО\s+(\S+)/ },
+    
+    // Фамилия в дипломе - после "Фамилия указанная в дипломе"
+    { key: 'diplomaSurname', pattern: /Фамилия указанная в дипломе[^]*?([А-Яа-яЁё\s]+?)(?=Серия документа|Номер документа|Дата|СНИЛС|Гражданство|$)/ },
+    
+    // Серия документа - после "Серия документа о ВО СПО"
+    { key: 'documentSeries', pattern: /Серия документа о ВО СПО\s+([А-Яа-яЁёA-Za-z0-9]+)/ },
+    
+    // Номер документа - после "Номер документа о ВО СПО"  
+    { key: 'documentNumber', pattern: /Номер документа о ВО СПО\s+([А-Яа-яЁёA-Za-z0-9]+)/ },
+    
+    // Дата рождения - в формате YYYY-MM-DD
+    { key: 'birthDate', pattern: /Дата вашего рождения\s+(\d{4}-\d{2}-\d{2})/ },
+    
+    // СНИЛС - пока пустое
+    { key: 'snils', pattern: /СНИЛС[^]*?(\d{2,3}[\-\s]?\d{3}[\-\s]?\d{3}[\s]?\d{2})/ },
+    
+    // Гражданство - всё после "Гражданство"
+    { key: 'citizenship', pattern: /Гражданство\s+(.+)$/ }
+  ];
+
+  patterns.forEach(({ key, pattern }) => {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      result[key] = match[1].trim();
+      console.log(`Found ${key}: ${match[1].trim()}`);
     }
   });
 
