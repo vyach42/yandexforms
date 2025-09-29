@@ -1,52 +1,4 @@
-// api/proxy.js
-export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    try {
-      // Получаем сырые данные от Яндекс Форм
-      const rawBody = await getRawBody(req);
-      console.log('Raw data from Yandex:', rawBody);
-
-      // Умный парсинг текстовых данных
-      const parsedData = parseYandexFormData(rawBody);
-      console.log('Parsed data:', parsedData);
-
-      // Google Script URL
-      const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbxeVcTESx1jiQjeVv80fR8a-ThN95pXamLEL9FkDc4VGNVi8vt58IV5MptKh4y5_IiZmg/exec';
-
-      // Отправляем в Google Script как JSON
-      const response = await fetch(googleScriptUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(parsedData)
-      });
-
-      const result = await response.text();
-      console.log('Google Script response:', result);
-
-      res.status(200).send(result);
-
-    } catch (error) {
-      console.error('Proxy error:', error);
-      res.status(500).send('Proxy error: ' + error.message);
-    }
-  } else {
-    res.status(405).send('Method not allowed');
-  }
-}
-
-// Функция для получения raw body
-async function getRawBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => data += chunk);
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
-}
-
-// Умный парсинг данных Яндекс Форм
+// Простой и надежный парсинг по ключевым словам
 function parseYandexFormData(rawData) {
   const result = {
     fullName: '',
@@ -64,49 +16,60 @@ function parseYandexFormData(rawData) {
     submitDate: ''
   };
 
-  // Убираем префикс
   let text = rawData.replace('Raw data from Yandex: ', '');
   
-  // Вытаскиваем дату отправки (последняя дата в формате DD.MM.YYYY)
+  // Дата отправки
   const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4})$/);
   if (dateMatch) {
     result.submitDate = dateMatch[1];
     text = text.replace(dateMatch[0], '').trim();
   }
 
-  // Разбиваем по ключевым словам вопросов
-  const patterns = [
-    { key: 'fullName', pattern: /^(.+?)(?=E-mail)/ },
-    { key: 'email', pattern: /E-mail\s+(.+?)(?=Ваш номер телефона)/ },
-    { key: 'phone', pattern: /Ваш номер телефона[^]*?(\+?[\d\s\-\(\)]+?)(?=Ссылка на скан|Уровень образования|Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство|$)/ },
-    { key: 'educationDocLink', pattern: /Ссылка на скан или фото документа об образовании[^]*?(https?:\/\/[^\s]+)/ },
-    { key: 'nameChangeDocLink', pattern: /Ссылка на скан или фото документа о смене фамилии[^]*?(https?:\/\/[^\s]+)/ },
-    { key: 'educationLevel', pattern: /Уровень образования ВО СПО\s+(.+?)(?=Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство|$)/ },
-    { key: 'diplomaSurname', pattern: /Фамилия указанная в дипломе[^]*?(.+?)(?=Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство|$)/ },
-    { key: 'documentSeries', pattern: /Серия документа[^]*?(.+?)(?=Номер документа|Дата вашего рождения|СНИЛС|Гражданство|$)/ },
-    { key: 'documentNumber', pattern: /Номер документа[^]*?(.+?)(?=Дата вашего рождения|СНИЛС|Гражданство|$)/ },
-    { key: 'birthDate', pattern: /Дата вашего рождения\s+(\d{4}-\d{2}-\d{2})/ },
-    { key: 'snils', pattern: /СНИЛС[^]*?(\d{2,3}[\-\s]?\d{3}[\-\s]?\d{3}[\s]?\d{2})/ },
-    { key: 'citizenship', pattern: /Гражданство\s+(.+)$/ }
-  ];
+  // Разбиваем текст по ключевым словам
+  const sections = text.split(/(?=E-mail|Ваш номер телефона|Ссылка на скан|Уровень образования|Фамилия указанная|Серия документа|Номер документа|Дата вашего рождения|СНИЛС|Гражданство)/);
 
-  patterns.forEach(({ key, pattern }) => {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      result[key] = match[1].trim();
-      
-      // Убираем найденное из текста для следующих поисков
-      if (key !== 'fullName') { // fullName особый случай
-        text = text.replace(match[0], '');
-      }
+  sections.forEach(section => {
+    section = section.trim();
+    
+    if (section.startsWith('E-mail')) {
+      result.email = section.replace('E-mail', '').trim();
+    } 
+    else if (section.startsWith('Ваш номер телефона')) {
+      // Ищем номер телефона (цифры после описания)
+      const phoneMatch = section.match(/([7]\s?[0-9\s\-\(\)]{10,})/);
+      if (phoneMatch) result.phone = phoneMatch[1].trim();
+    }
+    else if (section.includes('документа об образовании') && section.includes('http')) {
+      const linkMatch = section.match(/(http[^\s]+)/);
+      if (linkMatch) result.educationDocLink = linkMatch[1];
+    }
+    else if (section.startsWith('Уровень образования')) {
+      result.educationLevel = section.replace('Уровень образования ВО СПО', '').trim();
+    }
+    else if (section.startsWith('Фамилия указанная')) {
+      result.diplomaSurname = section.replace('Фамилия указанная в дипломе о ВО или СПО', '').trim();
+    }
+    else if (section.startsWith('Серия документа')) {
+      result.documentSeries = section.replace('Серия документа о ВО СПО', '').trim();
+    }
+    else if (section.startsWith('Номер документа')) {
+      result.documentNumber = section.replace('Номер документа о ВО СПО', '').trim();
+    }
+    else if (section.startsWith('Дата вашего рождения')) {
+      const dateMatch = section.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) result.birthDate = dateMatch[1];
+    }
+    else if (section.startsWith('СНИЛС')) {
+      // Парсинг СНИЛС
+    }
+    else if (section.startsWith('Гражданство')) {
+      result.citizenship = section.replace('Гражданство', '').trim();
+    }
+    else if (!section.includes('E-mail') && !section.includes('Ваш номер')) {
+      // Это ФИО (первая секция без ключевых слов)
+      result.fullName = section.trim();
     }
   });
-
-  // Особый случай для ФИО - берем все до первого E-mail
-  const nameMatch = text.match(/^(.+?)(?=E-mail)/);
-  if (nameMatch) {
-    result.fullName = nameMatch[1].trim();
-  }
 
   return result;
 }
