@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       console.log('Parsed data:', parsedData);
 
       // Google Script URL (ЗАМЕНИ НА СВОЙ)
-      const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbwJI7zQ0JSygFlJWuzCREjBC05Pl8_D5cF4RQy4aG7pMb1ubUIM7Wek0oci3OkHIUvheQ/exec';
+      const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbxeVcTESx1jiQjeVv80fR8a-ThN95pXamLEL9FkDc4VGNVi8vt58IV5MptKh4y5_IiZmg/exec';
 
       // Отправляем в Google Script как JSON
       const response = await fetch(googleScriptUrl, {
