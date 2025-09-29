@@ -90,9 +90,8 @@ function parseYandexFormData(rawData) {
     else if (line.includes('E-mail:')) {
       result.email = getNextNonEmptyLine(lines, i);
     }
-    // Телефон - ПРОСТО БЕРЕМ КАК ЕСТЬ
-    else if (line.includes('Ваш номер телефона') || 
-             (line.includes('формате 70001234567') && i > 0 && lines[i-1].includes('Ваш номер телефона'))) {
+    // Телефон - НОВАЯ ЛОГИКА
+    else if (line.includes('Ваш номер телефона')) {
       result.phone = getNextNonEmptyLine(lines, i);
     }
     // Ссылка на документ об образовании
@@ -156,6 +155,7 @@ function isQuestionLine(line) {
     'E-mail:',
     'Ваш номер телефона',
     'формате 70001234567',
+    '(не используйте ""+"", ""-"" и скобки)":', // Добавлена вторая часть вопроса о телефоне
     'Ссылка на скан',
     'Уровень образования',
     'Фамилия указанная в дипломе',
