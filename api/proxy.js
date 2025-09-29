@@ -90,10 +90,10 @@ function parseYandexFormData(rawData) {
     else if (line.includes('E-mail:')) {
       result.email = getNextNonEmptyLine(lines, i);
     }
-    // Телефон - ОБРАБАТЫВАЕМ РАЗБИТЫЙ НА ДВЕ СТРОКИ ВОПРОС
+    // Телефон - ПРОСТО БЕРЕМ КАК ЕСТЬ
     else if (line.includes('Ваш номер телефона') || 
              (line.includes('формате 70001234567') && i > 0 && lines[i-1].includes('Ваш номер телефона'))) {
-      result.phone = cleanPhone(getNextNonEmptyLine(lines, i));
+      result.phone = getNextNonEmptyLine(lines, i);
     }
     // Ссылка на документ об образовании
     else if (line.includes('Ссылка на скан или фото документа об образовании')) {
@@ -167,38 +167,4 @@ function isQuestionLine(line) {
   ];
   
   return questionPatterns.some(pattern => line.includes(pattern));
-}
-
-// Функция для очистки номера телефона - ИСПРАВЛЕННАЯ
-function cleanPhone(phone) {
-  if (!phone) return '';
-  
-  console.log('Cleaning phone:', phone);
-  
-  // Убираем все кроме цифр
-  const cleaned = phone.replace(/\D/g, '');
-  console.log('After removing non-digits:', cleaned);
-  
-  // Если номер начинается с 7 или 8 и длина больше 10 цифр
-  if (cleaned.length >= 11) {
-    if (cleaned.startsWith('7') || cleaned.startsWith('8')) {
-      return '7' + cleaned.substring(1, 11); // Берем первые 11 цифр
-    }
-  }
-  
-  // Если номер короче, но начинается с 7 или 8
-  if (cleaned.startsWith('7') && cleaned.length === 11) {
-    return cleaned;
-  }
-  if (cleaned.startsWith('8') && cleaned.length === 11) {
-    return '7' + cleaned.substring(1);
-  }
-  
-  // Если номер 10 цифр без 7/8 в начале
-  if (cleaned.length === 10) {
-    return '7' + cleaned;
-  }
-  
-  // Для российских номеров оставляем как есть (может быть короткий номер)
-  return cleaned;
 }
