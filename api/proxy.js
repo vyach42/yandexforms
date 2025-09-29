@@ -46,59 +46,7 @@ async function getRawBody(req) {
   });
 }
 
-// Функция для восстановления ссылок из ебанного формата Яндекса
-function fixYandexUrl(brokenUrl) {
-  if (!brokenUrl) return '';
-  
-  // Восстанавливаем нормальный URL
-  let fixed = brokenUrl
-    .replace(/^https /, 'https://')
-    .replace(/^http /, 'http://')
-    .replace(/\s+/g, '/') // Заменяем пробелы на слеши
-    .replace(/\/$/, ''); // Убираем trailing slash если есть
-  
-  return fixed;
-}
-
-// Функция для извлечения URL из ответа
-function extractUrl(text) {
-  // Пробуем найти нормальный URL
-  const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
-  if (urlMatch) return urlMatch[1];
-  
-  // Если нет нормального URL, пробуем восстановить из ебанного формата Яндекса
-  const yandexUrlMatch = text.match(/(https?)\s+([^\s]+(?:\s+[^\s]+)*)/);
-  if (yandexUrlMatch) {
-    const protocol = yandexUrlMatch[1];
-    const path = yandexUrlMatch[2];
-    return fixYandexUrl(`${protocol} ${path}`);
-  }
-  
-  return text;
-}
-
-// Функция для извлечения даты из ответа
-function extractDate(text) {
-  const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
-  return dateMatch ? dateMatch[1] : text;
-}
-
-// Функция для очистки ответа от остатков вопросов
-function cleanAnswer(answer, allQuestions) {
-  let cleaned = answer;
-  
-  // Ищем в ответе начало любого другого вопроса и обрезаем до него
-  allQuestions.forEach(question => {
-    const questionIndex = cleaned.indexOf(question);
-    if (questionIndex !== -1) {
-      cleaned = cleaned.substring(0, questionIndex).trim();
-    }
-  });
-  
-  return cleaned;
-}
-
-// Простой и надежный парсинг по точным вопросам С ЗАЩИТОЙ
+// НОВЫЙ ПАРСЕР С ПРАВИЛЬНОЙ ОБРАБОТКОЙ ДАТЫ
 function parseYandexFormData(rawData) {
   const result = {
     fullName: '',
@@ -118,98 +66,81 @@ function parseYandexFormData(rawData) {
 
   let text = rawData.replace('Raw data from Yandex: ', '');
   
-  // Вытаскиваем дату отправки (последняя дата в формате DD.MM.YYYY)
-  const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4})$/);
+  // ВЫНОСИМ ДАТУ В САМОЕ НАЧАЛО - ищем дату в формате DD.MM.YYYY
+  const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4})/);
   if (dateMatch) {
     result.submitDate = dateMatch[1];
-    text = text.replace(dateMatch[0], '').trim();
+    // Убираем дату из текста - заменяем на специальный маркер
+    text = text.replace(dateMatch[0], '%%DATE_REMOVED%%').trim();
   }
 
-  // Точные тексты вопросов (как приходят в данных) - В ТОЧНОМ ПОРЯДКЕ
-  const questions = [
-    'ФИО как в паспорте',
-    'E-mail', 
-    'Ваш номер телефона в формате 70001234567 не используйте , - и скобки',
-    'Ссылка на скан или фото документа об образовании Яндекс.Диск',
-    'Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании Яндекс.Диск',
-    'Уровень образования ВО СПО',
-    'Фамилия указанная в дипломе о ВО или СПО',
-    'Серия документа о ВО СПО',
-    'Номер документа о ВО СПО',
-    'Дата вашего рождения',
-    'СНИЛС в формате 123-456-789 98',
-    'Гражданство'
-  ];
-
-  // Создаем массив найденных вопросов с их позициями
-  const foundQuestions = [];
+  // Разбиваем на строки и парсим
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line);
   
-  questions.forEach(question => {
-    const position = text.indexOf(question);
-    if (position !== -1) {
-      foundQuestions.push({
-        question: question,
-        position: position
-      });
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Пропускаем маркер даты
+    if (line.includes('%%DATE_REMOVED%%')) continue;
+    
+    // Определяем поле по заголовку и берем следующую строку как значение
+    if (line.includes('ФИО (как в паспорте):')) {
+      result.fullName = cleanValue(getValueFromNextLine(lines, i));
     }
-  });
-
-  // Сортируем вопросы по их позиции в тексте
-  foundQuestions.sort((a, b) => a.position - b.position);
-
-  // Обрабатываем каждый найденный вопрос
-  for (let i = 0; i < foundQuestions.length; i++) {
-    const currentQ = foundQuestions[i];
-    const nextQ = foundQuestions[i + 1];
-    
-    const startIndex = currentQ.position + currentQ.question.length;
-    const endIndex = nextQ ? nextQ.position : text.length;
-    
-    let answer = text.substring(startIndex, endIndex).trim();
-    
-    // Очищаем ответ от возможных остатков других вопросов
-    answer = cleanAnswer(answer, questions);
-    
-    // Сохраняем в соответствующее поле
-    switch(currentQ.question) {
-      case 'ФИО как в паспорте':
-        result.fullName = answer;
-        break;
-      case 'E-mail':
-        result.email = answer;
-        break;
-      case 'Ваш номер телефона в формате 70001234567 не используйте , - и скобки':
-        result.phone = answer;
-        break;
-      case 'Ссылка на скан или фото документа об образовании Яндекс.Диск':
-        result.educationDocLink = extractUrl(answer);
-        break;
-      case 'Ссылка на скан или фото документа о смене фамилии, если ФИО в паспорте не соответствуют ФИО в документе об образовании Яндекс.Диск':
-        result.nameChangeDocLink = extractUrl(answer);
-        break;
-      case 'Уровень образования ВО СПО':
-        result.educationLevel = answer;
-        break;
-      case 'Фамилия указанная в дипломе о ВО или СПО':
-        result.diplomaSurname = answer;
-        break;
-      case 'Серия документа о ВО СПО':
-        result.documentSeries = answer;
-        break;
-      case 'Номер документа о ВО СПО':
-        result.documentNumber = answer;
-        break;
-      case 'Дата вашего рождения':
-        result.birthDate = extractDate(answer);
-        break;
-      case 'СНИЛС в формате 123-456-789 98':
-        result.snils = answer;
-        break;
-      case 'Гражданство':
-        result.citizenship = answer;
-        break;
+    else if (line.includes('E-mail:')) {
+      result.email = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Ваш номер телефона')) {
+      result.phone = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Ссылка на скан или фото документа об образовании')) {
+      result.educationDocLink = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Ссылка на скан или фото документа о смене фамилии')) {
+      result.nameChangeDocLink = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Уровень образования ВО/СПО:')) {
+      result.educationLevel = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Фамилия указанная в дипломе о ВО или СПО:')) {
+      result.diplomaSurname = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Серия документа о ВО/СПО:')) {
+      result.documentSeries = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Номер документа о ВО/СПО:')) {
+      result.documentNumber = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Дата вашего рождения:')) {
+      result.birthDate = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('СНИЛС в формате 123-456-789 98:')) {
+      result.snils = cleanValue(getValueFromNextLine(lines, i));
+    }
+    else if (line.includes('Гражданство:')) {
+      result.citizenship = cleanValue(getValueFromNextLine(lines, i));
     }
   }
 
   return result;
+}
+
+// Функция для очистки значения от прилипшей даты
+function cleanValue(value) {
+  if (!value) return '';
+  
+  // Убираем дату в формате DD.MM.YYYY если она прилипла
+  return value.replace(/(\d{2}\.\d{2}\.\d{4})$/, '').trim();
+}
+
+// Функция для получения значения из следующей строки
+function getValueFromNextLine(lines, currentIndex) {
+  if (currentIndex + 1 < lines.length) {
+    const nextLine = lines[currentIndex + 1];
+    // Проверяем, что следующая строка не является новым заголовком
+    if (!nextLine.includes(':') || nextLine.endsWith('):')) {
+      return nextLine;
+    }
+  }
+  return '';
 }
