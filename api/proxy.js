@@ -46,7 +46,7 @@ async function getRawBody(req) {
   });
 }
 
-// ИСПРАВЛЕННЫЙ ПАРСЕР
+// ИСПРАВЛЕННЫЙ ПАРСЕР С НОВЫМИ ФОРМУЛИРОВКАМИ
 function parseYandexFormData(rawData) {
   const result = {
     fullName: '',
@@ -90,16 +90,18 @@ function parseYandexFormData(rawData) {
     else if (line.includes('E-mail:')) {
       result.email = getNextNonEmptyLine(lines, i);
     }
-    // Телефон - НОВАЯ ЛОГИКА
+    // Телефон
     else if (line.includes('Ваш номер телефона')) {
       result.phone = getNextNonEmptyLine(lines, i);
     }
-    // Ссылка на документ об образовании
-    else if (line.includes('Ссылка на скан или фото документа об образовании')) {
+    // Ссылка на документ об образовании - НОВАЯ ФОРМУЛИРОВКА
+    else if (line.includes('Ссылка на скан или фото документа об образовании') || 
+             line.includes('Прикрепите скан или фото документа об образовании')) {
       result.educationDocLink = getNextNonEmptyLine(lines, i);
     }
-    // Ссылка на документ о смене фамилии
-    else if (line.includes('Ссылка на скан или фото документа о смене фамилии')) {
+    // Ссылка на документ о смене фамилии - НОВАЯ ФОРМУЛИРОВКА
+    else if (line.includes('Ссылка на скан или фото документа о смене фамилии') || 
+             line.includes('Прикрепите скан или фото документа о смене фамилии')) {
       result.nameChangeDocLink = getNextNonEmptyLine(lines, i);
     }
     // Уровень образования
@@ -148,15 +150,17 @@ function getNextNonEmptyLine(lines, currentIndex) {
   return '';
 }
 
-// Функция для проверки, является ли строка вопросом
+// Функция для проверки, является ли строка вопросом - ОБНОВЛЕНА С НОВЫМИ ФОРМУЛИРОВКАМИ
 function isQuestionLine(line) {
   const questionPatterns = [
     'ФИО',
     'E-mail:',
     'Ваш номер телефона',
     'формате 70001234567',
-    '(не используйте ""+"", ""-"" и скобки)":', // Добавлена вторая часть вопроса о телефоне
+    '(не используйте ""+"", ""-"" и скобки)":',
     'Ссылка на скан',
+    'Прикрепите скан или фото документа об образовании',
+    'Прикрепите скан или фото документа о смене фамилии',
     'Уровень образования',
     'Фамилия указанная в дипломе',
     'Серия документа',
