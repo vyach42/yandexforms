@@ -61,7 +61,8 @@ function parseYandexFormData(rawData) {
     birthDate: '',
     snils: '',
     citizenship: '',
-    submitDate: ''
+    submitDate: '',
+    docsSubmittedPreviously: ''
   };
 
   let text = rawData;
@@ -132,6 +133,9 @@ function parseYandexFormData(rawData) {
     else if (line.includes('Гражданство:')) {
       result.citizenship = getNextNonEmptyLine(lines, i);
     }
+    else if (line.includes('Я уже загружал документы:')) {
+      result.docsSubmittedPreviously = getNextNonEmptyLine(lines, i);
+    }
   }
 
   return result;
@@ -167,7 +171,8 @@ function isQuestionLine(line) {
     'Номер документа',
     'Дата вашего рождения',
     'СНИЛС',
-    'Гражданство:'
+    'Гражданство:',
+    'Я уже загружал документы'
   ];
   
   return questionPatterns.some(pattern => line.includes(pattern));
